@@ -1,9 +1,6 @@
 // OpenCL kernel for experimenting with phylogenic tree looping
 // Martin Smith: October 2010
 // 
-// Issues remaining: As the experimental loop dumped into parentcache
-// regardless of node, parallel write issues make this a difficult
-// simulation.
 //
  #pragma OPENCL EXTENSION cl_khr_fp64: enable
  

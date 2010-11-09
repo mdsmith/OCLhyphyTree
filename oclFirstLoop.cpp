@@ -3,6 +3,12 @@
 //
 // Runs computations with OpenCL on the GPU device and then checks results 
 // against basic host CPU/C++ computation.
+// 
+// The purpose of this revision is to introduce greater Node parallelism
+// by going from:
+// site : SITES -> Work Group(site)x1x1
+// to:
+// node : NODES && site : SITES -> WorkGroup(node)xWorkGroup(site)x1
 //
 // *********************************************************************
 
@@ -25,7 +31,7 @@ typedef cl_double clfp;
 //**********************************************************************
 #define SITES			1024	//originally 1000
 #define	CHARACTERS		64		//originally 61 (codons)
-#define NODES			512		//originally 100
+#define NODES			2		//originally 100
 
 // Name of the file with the source code for the computation kernel
 // *********************************************************************
@@ -90,7 +96,7 @@ int main(int argc, char **argv)
     // set and log Global and Local work size dimensions
 	
     szLocalWorkSize = CHARACTERS;
-	szGlobalWorkSize = SITES * CHARACTERS;
+	szGlobalWorkSize = NODES * SITES * CHARACTERS;
     printf("Global Work Size \t\t= %u\nLocal Work Size \t\t= %u\n# of Work Groups \t\t= %u\n\n", 
            szGlobalWorkSize, szLocalWorkSize, (szGlobalWorkSize % szLocalWorkSize + szGlobalWorkSize/szLocalWorkSize)); 
 
@@ -309,43 +315,43 @@ int main(int argc, char **argv)
 	int nodeIndex;
 	
 	printf("clEnqueueNDRangeKernel (FirstLoop)...\n"); 
-	for (nodeIndex = 0; nodeIndex < NODES; nodeIndex++)
-	{
+//	for (nodeIndex = 0; nodeIndex < NODES; nodeIndex++)
+//	{
 	
 		ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckKernel, 1, NULL, &szGlobalWorkSize, &szLocalWorkSize, 0, NULL, NULL);
 		
 		if (ciErr1 != CL_SUCCESS)
-		{
+                {
 		
-		printf("%i\n", ciErr1); //prints "1"
-		switch(ciErr1)
-		{
-		    case   CL_INVALID_PROGRAM_EXECUTABLE: printf("CL_INVALID_PROGRAM_EXECUTABLE\n"); break;
-		    case   CL_INVALID_COMMAND_QUEUE: printf("CL_INVALID_COMMAND_QUEUE\n"); break;
-		    case   CL_INVALID_KERNEL: printf("CL_INVALID_KERNEL\n"); break;
-		    case   CL_INVALID_CONTEXT: printf("CL_INVALID_CONTEXT\n"); break;	
-		    case   CL_INVALID_KERNEL_ARGS: printf("CL_INVALID_KERNEL_ARGS\n"); break;
-		    case   CL_INVALID_WORK_DIMENSION: printf("CL_INVALID_WORK_DIMENSION\n"); break;
-		    case   CL_INVALID_GLOBAL_WORK_SIZE: printf("CL_INVALID_GLOBAL_WORK_SIZE\n"); break;
-		    case   CL_INVALID_GLOBAL_OFFSET: printf("CL_INVALID_GLOBAL_OFFSET\n"); break;
-		    case   CL_INVALID_WORK_GROUP_SIZE: printf("CL_INVALID_WORK_GROUP_SIZE\n"); break;
-			case   CL_INVALID_WORK_ITEM_SIZE: printf("CL_INVALID_WORK_ITEM_SIZE\n"); break;
-//			case   CL_MISALIGNED_SUB_BUFFER_OFFSET: printf("CL_OUT_OF_HOST_MEMORY\n"); break;
-			case   CL_INVALID_IMAGE_SIZE: printf("CL_INVALID_IMAGE_SIZE\n"); break;
-			case   CL_OUT_OF_RESOURCES: printf("CL_OUT_OF_RESOURCES\n"); break;
-			case   CL_MEM_OBJECT_ALLOCATION_FAILURE: printf("CL_MEM_OBJECT_ALLOCATION_FAILURE\n"); break;
-			case   CL_INVALID_EVENT_WAIT_LIST: printf("CL_INVALID_EVENT_WAIT_LIST\n"); break;
-			case   CL_OUT_OF_HOST_MEMORY: printf("CL_OUT_OF_HOST_MEMORY\n"); break;
-			default: printf("Strange error\n"); //This is printed
-		}
+                        printf("%i\n", ciErr1); //prints "1"
+                        switch(ciErr1)
+                        {
+                                case   CL_INVALID_PROGRAM_EXECUTABLE: printf("CL_INVALID_PROGRAM_EXECUTABLE\n"); break;
+                                case   CL_INVALID_COMMAND_QUEUE: printf("CL_INVALID_COMMAND_QUEUE\n"); break;
+                                case   CL_INVALID_KERNEL: printf("CL_INVALID_KERNEL\n"); break;
+                                case   CL_INVALID_CONTEXT: printf("CL_INVALID_CONTEXT\n"); break;	
+                                case   CL_INVALID_KERNEL_ARGS: printf("CL_INVALID_KERNEL_ARGS\n"); break;
+                                case   CL_INVALID_WORK_DIMENSION: printf("CL_INVALID_WORK_DIMENSION\n"); break;
+                                case   CL_INVALID_GLOBAL_WORK_SIZE: printf("CL_INVALID_GLOBAL_WORK_SIZE\n"); break;
+                                case   CL_INVALID_GLOBAL_OFFSET: printf("CL_INVALID_GLOBAL_OFFSET\n"); break;
+                                case   CL_INVALID_WORK_GROUP_SIZE: printf("CL_INVALID_WORK_GROUP_SIZE\n"); break;
+                                case   CL_INVALID_WORK_ITEM_SIZE: printf("CL_INVALID_WORK_ITEM_SIZE\n"); break;
+        //			case   CL_MISALIGNED_SUB_BUFFER_OFFSET: printf("CL_OUT_OF_HOST_MEMORY\n"); break;
+                                case   CL_INVALID_IMAGE_SIZE: printf("CL_INVALID_IMAGE_SIZE\n"); break;
+                                case   CL_OUT_OF_RESOURCES: printf("CL_OUT_OF_RESOURCES\n"); break;
+                                case   CL_MEM_OBJECT_ALLOCATION_FAILURE: printf("CL_MEM_OBJECT_ALLOCATION_FAILURE\n"); break;
+                                case   CL_INVALID_EVENT_WAIT_LIST: printf("CL_INVALID_EVENT_WAIT_LIST\n"); break;
+                                case   CL_OUT_OF_HOST_MEMORY: printf("CL_OUT_OF_HOST_MEMORY\n"); break;
+                                default: printf("Strange error\n"); //This is printed
+                        }
 		
         printf("Error in clEnqueueNDRangeKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
-    }
-		
+                }
+	
 //		ciErr1 = clEnqueueBarrier(cqCommandQueue);
 	
-	}
+//	}
 	
 
     // Synchronous/blocking read of results, and check accumulated errors
@@ -388,16 +394,25 @@ int main(int argc, char **argv)
 
     printf("%f seconds on host\n", difftime(time(NULL), htimer));
 
+/*
+        int goldenLoop = 0;
+        for (goldenLoop = 0; goldenLoop < SITES; goldenLoop++)
+        {
+                printf("Golden: %e\n", ((fpoint*)Golden)[goldenLoop*CHARACTERS]);
+        }
+*/
+
 	bool match = true;
 //        int unmatching = 0;
 //        long firstUnmatch = -1;
 //        long lastUnmatch = -1;
-	for (int i = 0; i < CHARACTERS*SITES; i++)
+        int verI;
+	for (verI  = 0; verI < CHARACTERS*SITES; verI++)
 	{
-//                if (i<100)
-//                        printf("%e, %e\n", ((fpoint*)parent_cache)[i], ((fpoint*)Golden)[i]); 
+                if (verI%(SITES)==0)
+                        printf("Device: %e, Host: %e\n", ((fpoint*)parent_cache)[verI], ((fpoint*)Golden)[verI]); 
 //                if (((fpoint*)parent_cache)[i] != ((fpoint*)Golden)[i]) match = false;
-                if (((fpoint*)parent_cache)[i] != ((fpoint*)Golden)[i])
+                if (((fpoint*)parent_cache)[verI] != ((fpoint*)Golden)[verI])
                 {
                         match = false;
 //                        unmatching++;
@@ -455,30 +470,25 @@ void FirstLoopHost(const fpoint* hnode_cache, const fpoint* hmodel, fpoint* hpar
 
 	for (index = 0; index < NODES; index++) // this is meant to simulate looping over tree nodes
         {        
-			int nodeIndex = index*SITES*CHARACTERS;
-			for (site = 0; site < SITES; site++)
-			{
-				int siteIndex = site*CHARACTERS;
-				for (parentChar = 0; parentChar < CHARACTERS; parentChar++)
-				{
-					sum = 0.;
-					//here
-					for (myChar = 0; myChar < CHARACTERS; myChar++)
-					{
-						sum += hnode_cache[site*CHARACTERS+myChar] * hmodel[parentChar*CHARACTERS+myChar];
-					}
-//                    if ((index%100) == 0) printf("index: %ld, sum: %e\n", index, sum);
-					hparent_cache[siteIndex+parentChar] *= sum;
-//                    if ((index%100) == 0) printf("index: %ld, parent_cache: %e\n", index, hparent_cache[site*CHARACTERS+parentChar]);
-				}
-			}
+                int nodeIndex = index*SITES*CHARACTERS;
+                for (site = 0; site < SITES; site++)
+                {
+                        int siteIndex = site*CHARACTERS;
+                        for (parentChar = 0; parentChar < CHARACTERS; parentChar++)
+                        {
+                                sum = 0.;
+                                //here
+                                for (myChar = 0; myChar < CHARACTERS; myChar++)
+                                {
+                                        sum += hnode_cache[site*CHARACTERS+myChar] * hmodel[parentChar*CHARACTERS+myChar];
+                                }
+                                hparent_cache[siteIndex+parentChar] *= sum;
+                        }
+                }
+//                printf("Index: %i, ParentCache: %e\n", index, hparent_cache[0]);
         }      
-
-//        for (i=0;i< CHARACTERS*SITES;i++)
+//        for (index = 0; index < SITES; index++)
 //        {
-//                if (i%10000==0)
-//                {
-//                        printf("Node_cache: %e, Parent_cache: %e\n", ((fpoint*)hnode_cache)[i], ((fpoint*)hparent_cache)[i]);
-//                }
+//                printf("hparent_cache: %e\n", hparent_cache[index*CHARACTERS]);
 //        }
 }
