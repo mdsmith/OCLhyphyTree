@@ -258,7 +258,7 @@ int main(int argc, char **argv)
           switch(ciErr1)
           {
                 case   CL_INVALID_PROGRAM: printf("CL_INVALID_PROGRAM\n"); break;
-                case   CL_INVALID_VALUE: printf("CL_INVALID_VALUE\n"); break
+                case   CL_INVALID_VALUE: printf("CL_INVALID_VALUE\n"); break;
                 case   CL_INVALID_DEVICE: printf("CL_INVALID_DEVICE\n"); break;
                 case   CL_INVALID_BINARY: printf("CL_INVALID_BINARY\n"); break; 
                 case   CL_INVALID_BUILD_OPTIONS: printf("CL_INVALID_BUILD_OPTIONS\n"); break;
