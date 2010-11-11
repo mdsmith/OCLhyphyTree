@@ -6,7 +6,7 @@
  
 typedef double fpoint;
 
-__kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint* model, __global fpoint* parent_cache, int nodes, int sites, int characters)
+__kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint* model, __global fpoint* parent_cache, __local fpoint* nodeScratch, __local fpoint * modelScratch, int nodes, int sites, int characters)
 {
     // get index into global data array
     int parentCharGlobal = get_global_id(0);
@@ -19,14 +19,24 @@ __kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint
 //        return; 
 //    }
 
+	nodeScratch[parentCharLocal] = node_cache[parentCharGlobal];
+	// broken
+	modelScratch[parentCharLocal] = model[parentCharLocal * characters + parentCharLocal];
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
  	int siteStartID = parentCharGlobal-parentCharLocal;
 	int parentIndex = parentCharLocal * characters;
 	fpoint sum = 0.;
 	long myChar;
 	for (myChar = 0; myChar < characters; myChar++)
 	{
-		sum += node_cache[siteStartID+myChar] * model[parentIndex+myChar];
+//		// sum += node_cache[siteStartID+myChar] * model[parentIndex+myChar];
+		sum += nodeScratch[myChar] * modelScratch[myChar]; 
 	}
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
 	parent_cache[parentCharGlobal] *= sum;
 //	parent_cache[siteIndex+parentChar] *= sum;
 }

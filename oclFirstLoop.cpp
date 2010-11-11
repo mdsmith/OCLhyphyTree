@@ -22,8 +22,6 @@
 #include <stdio.h>
 #include <time.h>
 
-// #include <OpenCL/OpenCL.h>
-
 typedef double fpoint;
 typedef cl_double clfp;
 
@@ -31,7 +29,7 @@ typedef cl_double clfp;
 //**********************************************************************
 #define SITES			1024	//originally 1000
 #define	CHARACTERS		64		//originally 61 (codons)
-#define NODES			2		//originally 100
+#define NODES			4000		//originally 100
 
 // Name of the file with the source code for the computation kernel
 // *********************************************************************
@@ -54,6 +52,7 @@ cl_mem cmParent_cache;			// OpenCL device source for parent_cache
 cl_mem cmModel;					// OpenCL device source for model
 size_t szGlobalWorkSize;        // 1D var for Total # of work items
 size_t szLocalWorkSize;		    // 1D var for # of work items in the work group	
+size_t localMemorySize;			// size of local memory buffer for kernel scratch
 size_t szParmDataBytes;			// Byte size of context information
 size_t szKernelLength;			// Byte size of kernel code
 cl_int ciErr1, ciErr2;			// Error code var
@@ -96,7 +95,9 @@ int main(int argc, char **argv)
     // set and log Global and Local work size dimensions
 	
     szLocalWorkSize = CHARACTERS;
-	szGlobalWorkSize = NODES * SITES * CHARACTERS;
+//	szGlobalWorkSize = NODES * SITES * CHARACTERS;
+	szGlobalWorkSize = SITES * CHARACTERS;
+	localMemorySize = CHARACTERS;
     printf("Global Work Size \t\t= %u\nLocal Work Size \t\t= %u\n# of Work Groups \t\t= %u\n\n", 
            szGlobalWorkSize, szLocalWorkSize, (szGlobalWorkSize % szLocalWorkSize + szGlobalWorkSize/szLocalWorkSize)); 
 
@@ -283,13 +284,15 @@ int main(int argc, char **argv)
 	int tempCharCount = CHARACTERS;
 
     // Set the Argument values
-    ciErr1 = clSetKernelArg(ckKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
-    ciErr1 |= clSetKernelArg(ckKernel, 1, sizeof(cl_mem), (void*)&cmModel);
-    ciErr1 |= clSetKernelArg(ckKernel, 2, sizeof(cl_mem), (void*)&cmParent_cache);
-    ciErr1 |= clSetKernelArg(ckKernel, 3, sizeof(cl_int), (void*)&tempNodeCount);
-	ciErr1 |= clSetKernelArg(ckKernel, 4, sizeof(cl_int), (void*)&tempSiteCount);
-	ciErr1 |= clSetKernelArg(ckKernel, 5, sizeof(cl_int), (void*)&tempCharCount);
-    printf("clSetKernelArg 0 - 5...\n\n"); 
+	ciErr1 = clSetKernelArg(ckKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
+	ciErr1 |= clSetKernelArg(ckKernel, 1, sizeof(cl_mem), (void*)&cmModel);
+	ciErr1 |= clSetKernelArg(ckKernel, 2, sizeof(cl_mem), (void*)&cmParent_cache);
+	ciErr1 |= clSetKernelArg(ckKernel, 3, localMemorySize * sizeof(fpoint), NULL);
+	ciErr1 |= clSetKernelArg(ckKernel, 4, localMemorySize * sizeof(fpoint), NULL);
+	ciErr1 |= clSetKernelArg(ckKernel, 5, sizeof(cl_int), (void*)&tempNodeCount);
+	ciErr1 |= clSetKernelArg(ckKernel, 6, sizeof(cl_int), (void*)&tempSiteCount);
+	ciErr1 |= clSetKernelArg(ckKernel, 7, sizeof(cl_int), (void*)&tempCharCount);
+    printf("clSetKernelArg 0 - 7...\n\n"); 
     if (ciErr1 != CL_SUCCESS)
     {
         printf("Error in clSetKernelArg, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
@@ -315,8 +318,8 @@ int main(int argc, char **argv)
 	int nodeIndex;
 	
 	printf("clEnqueueNDRangeKernel (FirstLoop)...\n"); 
-//	for (nodeIndex = 0; nodeIndex < NODES; nodeIndex++)
-//	{
+	for (nodeIndex = 0; nodeIndex < NODES; nodeIndex++)
+	{
 	
 		ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckKernel, 1, NULL, &szGlobalWorkSize, &szLocalWorkSize, 0, NULL, NULL);
 		
@@ -351,7 +354,7 @@ int main(int argc, char **argv)
 	
 //		ciErr1 = clEnqueueBarrier(cqCommandQueue);
 	
-//	}
+	}
 	
 
     // Synchronous/blocking read of results, and check accumulated errors
@@ -409,8 +412,8 @@ int main(int argc, char **argv)
         int verI;
 	for (verI  = 0; verI < CHARACTERS*SITES; verI++)
 	{
-                if (verI%(SITES)==0)
-                        printf("Device: %e, Host: %e\n", ((fpoint*)parent_cache)[verI], ((fpoint*)Golden)[verI]); 
+//                if (verI%(SITES)==0)
+//                        printf("Device: %e, Host: %e\n", ((fpoint*)parent_cache)[verI], ((fpoint*)Golden)[verI]); 
 //                if (((fpoint*)parent_cache)[i] != ((fpoint*)Golden)[i]) match = false;
                 if (((fpoint*)parent_cache)[verI] != ((fpoint*)Golden)[verI])
                 {
