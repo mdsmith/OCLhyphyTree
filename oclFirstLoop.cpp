@@ -26,8 +26,16 @@ typedef cl_double clfp;
 // Constants
 //**********************************************************************
 #define SITES           1024    //originally 1000
-#define CHARACTERS      64      //originally 61 (codons)
-#define NODES           4000        //originally 100
+#define CHARACTERS      4      //originally 61 (codons)
+#define NODES           100        //originally 100
+
+
+// Scaling elements
+//**********************************************************************
+fpoint uflowThresh     = 0.00000001;
+fpoint scalar          = 100.0;
+void* scalings;
+cl_mem cmScalings;
 
 // Name of the file with the source code for the computation kernel
 // *********************************************************************
@@ -106,6 +114,7 @@ int main(int argc, char **argv)
 
     node_cache      = (void*)malloc (sizeof(clfp)*CHARACTERS*SITES);
     parent_cache    = (void*)malloc (sizeof(clfp)*CHARACTERS*SITES);
+    scalings        = (void*)malloc (sizeof(int)*CHARACTERS*SITES);
     model           = (void*)malloc (sizeof(clfp)*CHARACTERS*CHARACTERS);
     Golden          = (void*)malloc (sizeof(clfp)*CHARACTERS*SITES);
 
@@ -116,6 +125,7 @@ int main(int argc, char **argv)
         ((fpoint*)node_cache)[tempindex] = 1./CHARACTERS; // this is just dummy filler
         ((fpoint*)Golden)[tempindex] = 1.;
         ((fpoint*)parent_cache)[tempindex] = 1.;
+        ((int*)scalings)[tempindex] = 0;
     }
 
     // initialize the model
@@ -199,6 +209,9 @@ int main(int argc, char **argv)
     ciErr1 |= ciErr2;
     cmParent_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE, 
                     sizeof(clfp) * CHARACTERS * SITES, NULL, &ciErr2);
+    ciErr1 |= ciErr2;
+    cmScalings = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
+                    sizeof(cl_int) * CHARACTERS * SITES, NULL, &ciErr2);
     ciErr1 |= ciErr2;
     printf("clCreateBuffer...\n"); 
     if (ciErr1 != CL_SUCCESS)
@@ -293,7 +306,10 @@ int main(int argc, char **argv)
     ciErr1 |= clSetKernelArg(ckKernel, 5, sizeof(cl_int), (void*)&tempNodeCount);
     ciErr1 |= clSetKernelArg(ckKernel, 6, sizeof(cl_int), (void*)&tempSiteCount);
     ciErr1 |= clSetKernelArg(ckKernel, 7, sizeof(cl_int), (void*)&tempCharCount);
-    printf("clSetKernelArg 0 - 7...\n\n"); 
+    ciErr1 |= clSetKernelArg(ckKernel, 8, sizeof(cl_mem), (void*)&cmScalings);
+    ciErr1 |= clSetKernelArg(ckKernel, 9, sizeof(clfp), (void*)&uflowThresh);
+    ciErr1 |= clSetKernelArg(ckKernel, 10, sizeof(clfp), (void*)&scalar);
+    printf("clSetKernelArg 0 - 10...\n\n"); 
     if (ciErr1 != CL_SUCCESS)
     {
         printf("Error in clSetKernelArg, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
@@ -310,6 +326,8 @@ int main(int argc, char **argv)
                     sizeof(clfp) * CHARACTERS * CHARACTERS, model, 0, NULL, NULL);
     ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmParent_cache, CL_FALSE, 0, 
                     sizeof(clfp) * CHARACTERS * SITES, parent_cache, 0, NULL, NULL);
+    ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmScalings, CL_FALSE, 0,
+                    sizeof(cl_int) * CHARACTERS * SITES, scalings, 0, NULL, NULL);
     printf("clEnqueueWriteBuffer (node_cache, parent_cache and model)...\n"); 
     if (ciErr1 != CL_SUCCESS)
     {
@@ -365,6 +383,7 @@ int main(int argc, char **argv)
 
     // Synchronous/blocking read of results, and check accumulated errors
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmParent_cache, CL_TRUE, 0, sizeof(clfp) * CHARACTERS * SITES, parent_cache, 0, NULL, NULL);
+    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmScalings, CL_TRUE, 0, sizeof(cl_int) * CHARACTERS * SITES, scalings, 0, NULL, NULL);
     printf("clEnqueueReadBuffer...\n\n"); 
     if (ciErr1 != CL_SUCCESS)
     {
@@ -412,6 +431,20 @@ int main(int argc, char **argv)
         }
 */
 
+
+// Unscaling
+//***************************************************************************
+    int scIndex;
+    for (scIndex = 0; scIndex < CHARACTERS * SITES; scIndex++)
+    {
+        while (((int*)scalings)[scIndex] > 0)
+        {
+            ((fpoint*)parent_cache)[scIndex] /= scalar;
+            ((int*)scalings)[scIndex]--;
+        }
+    }
+
+
     bool match = true;
 //        int unmatching = 0;
 //        long firstUnmatch = -1;
@@ -419,8 +452,8 @@ int main(int argc, char **argv)
     int verI;
     for (verI  = 0; verI < CHARACTERS*SITES; verI++)
     {
-//                if (verI%(SITES)==0)
-//                        printf("Device: %e, Host: %e\n", ((fpoint*)parent_cache)[verI], ((fpoint*)Golden)[verI]); 
+                if (verI%(SITES)==0)
+                        printf("Device: %e, Host: %e, Scalings: %i\n", ((fpoint*)parent_cache)[verI], ((fpoint*)Golden)[verI], ((int*)scalings)[verI]); 
 //                if (((fpoint*)parent_cache)[i] != ((fpoint*)Golden)[i]) match = false;
         if (((fpoint*)parent_cache)[verI] != ((fpoint*)Golden)[verI])
         {

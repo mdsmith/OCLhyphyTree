@@ -1,12 +1,14 @@
 // OpenCL kernel for experimenting with phylogenic tree looping
-// Martin Smith: October 2010
+// Martin Smith: October 2010, Novemeber 2010
 // 
 //
  #pragma OPENCL EXTENSION cl_khr_fp64: enable
  
 typedef double fpoint;
 
-__kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint* model, __global fpoint* parent_cache, __local fpoint* nodeScratch, __local fpoint * modelScratch, int nodes, int sites, int characters)
+__kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint* model, __global fpoint* parent_cache, 
+        __local fpoint* nodeScratch, __local fpoint * modelScratch, int nodes, int sites, int characters, 
+        __global int* scalings, fpoint uflowthresh, fpoint scalar)
 {
     // get index into global data array
     int parentCharGlobal = get_global_id(0);
@@ -25,8 +27,8 @@ __kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 
- 	int siteStartID = parentCharGlobal-parentCharLocal;
-	int parentIndex = parentCharLocal * characters;
+// 	int siteStartID = parentCharGlobal-parentCharLocal;
+//	int parentIndex = parentCharLocal * characters;
 	fpoint sum = 0.;
 	long myChar;
 	for (myChar = 0; myChar < characters; myChar++)
@@ -37,6 +39,13 @@ __kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 
+    while (parent_cache[parentCharGlobal] < uflowthresh) 
+    {
+        parent_cache[parentCharGlobal] *= scalar;
+        scalings[parentCharGlobal] += 1;
+    }
+
 	parent_cache[parentCharGlobal] *= sum;
+//    if (parent_cache[parentCharGlobal] < .0000001 && scalings[parentCharGlobal] ==0) scalings[parentCharGlobal] += (uflowthresh);
 //	parent_cache[siteIndex+parentChar] *= sum;
 }
