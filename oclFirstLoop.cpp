@@ -4,11 +4,6 @@
 // Runs computations with OpenCL on the GPU device and then checks results 
 // against basic host CPU/C++ computation.
 // 
-// The purpose of this revision is to introduce greater Node parallelism
-// by going from:
-// site : SITES -> Work Group(site)x1x1
-// to:
-// node : NODES && site : SITES -> WorkGroup(node)xWorkGroup(site)x1
 //
 // *********************************************************************
 
@@ -21,6 +16,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+
+//struct timespec begin;
+//struct timespec end;
 
 typedef double fpoint;
 typedef cl_double clfp;
@@ -322,6 +320,8 @@ int main(int argc, char **argv)
     // Launch kernel
     
     int nodeIndex;
+
+//    clock_gettime(CLOCK_REALTIME, &begin);
     
     printf("clEnqueueNDRangeKernel (FirstLoop)...\n"); 
     for (nodeIndex = 0; nodeIndex < NODES; nodeIndex++)
@@ -361,6 +361,7 @@ int main(int argc, char **argv)
     
     }
     
+//    clock_gettime(CLOCK_REALTIME, &end);
 
     // Synchronous/blocking read of results, and check accumulated errors
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmParent_cache, CL_TRUE, 0, sizeof(clfp) * CHARACTERS * SITES, parent_cache, 0, NULL, NULL);
@@ -390,6 +391,8 @@ int main(int argc, char **argv)
     
     clFinish(cqCommandQueue);
     printf("%f seconds on device\n", difftime(time(NULL), dtimer));
+//    double timeDifference = ((double)end.tv_sec + ((double)end.tv_nsec/1000.0))-((double)begin.tv_sec + ((double)begin.tv_nsec/1000.0));
+//    printf("%f seconds on device\n", timeDifference);
     
     htimer = time(NULL);
 
