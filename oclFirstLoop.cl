@@ -4,11 +4,11 @@
 //
  #pragma OPENCL EXTENSION cl_khr_fp64: enable
 
-#if defined(__APPLE__)
-typedef float fpoint;
-#else
+//if defined(__APPLE__)
+//typedef float fpoint;
+//else
 typedef double fpoint;
-#endif
+//endif
 
 __kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint* model, __global fpoint* parent_cache, 
         __local fpoint* nodeScratch, __local fpoint * modelScratch, int nodes, int sites, int characters,

@@ -7,11 +7,11 @@
  */
 
 
-char * load_program_source(const char *filename)
+char * load_program_source(const char *filename, const char * argv, size_t *szKernelLength)
 {
 
-	shrLog("oclLoadProgSource (%s)...\n", cSourceFile); 
-	char* cPathAndName = shrFindFilePath(filename, argv[0]);
-	char* cSourceCL = oclLoadProgSource(cPathAndName, "", &szKernelLength); 
-	return source;
+	shrLog("oclLoadProgSource (%s)...\n", filename); 
+	char* cPathAndName = shrFindFilePath(filename, argv);
+	char* cSourceCL = oclLoadProgSource(cPathAndName, "", szKernelLength); 
+	return cSourceCL;
 }

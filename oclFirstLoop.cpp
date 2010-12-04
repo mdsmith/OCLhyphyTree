@@ -33,8 +33,8 @@ typedef cl_double clfp;
 // Constants
 //**********************************************************************
 #define SITES           1024    //originally 1000
-#define CHARACTERS      4      //originally 61 (codons)
-#define NODES           10        //originally 100
+#define CHARACTERS      64      //originally 61 (codons)
+#define NODES           1000        //originally 100
 
 
 // Scaling elements
@@ -75,7 +75,7 @@ char* cPathAndName = NULL;      // var for full paths to data, src, etc.
 // *********************************************************************
 void FirstLoopHost(const fpoint* node_cache, const fpoint* model, fpoint* parent_cache);
 void Cleanup (int iExitCode);
-extern char* load_program_source(const char *filename);
+extern char* load_program_source(const char *filename, const char *argv, size_t *szKernelLength);
 
 // Main function 
 // *********************************************************************
@@ -212,7 +212,7 @@ int main(int argc, char **argv)
     
 	// Read the OpenCL kernel in from source file
 	printf("LoadProgSource (%s)...\n", cSourceFile); 
-	char *program_source = load_program_source(cSourceFile);
+	char *program_source = load_program_source(cSourceFile, argv[0],  &szKernelLength);
 	cpProgram = clCreateProgramWithSource(cxGPUContext, 1, (const char**)&program_source,
 	                                         &szKernelLength, &ciErr1);
 	

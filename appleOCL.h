@@ -6,7 +6,7 @@
  *
  */
 
-char * load_program_source(const char *filename)
+char * load_program_source(const char *filename, const char *argv, size_t *szKernelLength)
 { 
     
     struct stat statbuf;
