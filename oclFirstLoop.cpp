@@ -34,12 +34,12 @@ typedef cl_double clfp;
 //**********************************************************************
 #define SITES           1024    //originally 1000
 #define CHARACTERS      64      //originally 61 (codons)
-#define NODES           1000        //originally 100
+#define NODES           150        //originally 100
 
 
 // Scaling elements
 //**********************************************************************
-fpoint uflowThresh     = 0.000001;
+fpoint uflowThresh     = 0.00000000000000000000000000000000000000000000000000000001;
 fpoint scalar          = 100.0;
 void* scalings;
 cl_mem cmScalings;
