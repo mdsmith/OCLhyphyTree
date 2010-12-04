@@ -211,10 +211,40 @@ int main(int argc, char **argv)
 	// Create the program
     
 	// Read the OpenCL kernel in from source file
-	printf("LoadProgSource (%s)...\n", cSourceFile); 
-	char *program_source = load_program_source(cSourceFile, argv[0],  &szKernelLength);
+
+	const char *program_source = "\n" \
+	"#pragma OPENCL EXTENSION cl_khr_fp64: enable																				\n" \
+	"typedef double fpoint;																										\n" \
+	"__kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint* model, __global fpoint* parent_cache, 	\n" \
+    "    __local fpoint* nodeScratch, __local fpoint * modelScratch, int nodes, int sites, int characters,						\n" \
+    "   __global int* scalings, fpoint uflowthresh, fpoint scalar)																\n" \
+	"{																															\n" \
+	"   int parentCharGlobal = get_global_id(0); // a unique global ID for each parentcharacter									\n" \
+    "   int parentCharLocal = get_local_id(0); // a local ID unique within the site.											\n" \
+	"   nodeScratch[parentCharLocal] = node_cache[parentCharGlobal];															\n" \
+    "   modelScratch[parentCharLocal] = model[parentCharLocal * characters + parentCharLocal];									\n" \
+	"	barrier(CLK_LOCAL_MEM_FENCE);																							\n" \
+	"   fpoint sum = 0.;																										\n" \
+    "   long myChar;																											\n" \
+    "   for (myChar = 0; myChar < characters; myChar++)																			\n" \
+    "   {																														\n" \
+    "       sum += nodeScratch[myChar] * modelScratch[myChar];																	\n" \
+    "   }																														\n" \
+    "   barrier(CLK_LOCAL_MEM_FENCE);																							\n" \
+    "   while (parent_cache[parentCharGlobal] < uflowthresh)																	\n" \
+    "   {																														\n" \
+    "       parent_cache[parentCharGlobal] *= scalar;																			\n" \
+    "    	scalings[parentCharGlobal] += 1;																					\n" \
+    "	}																														\n" \
+	"   parent_cache[parentCharGlobal] *= sum;																					\n" \
+	"}																															\n" \
+	"\n";
+
+      
+//	printf("LoadProgSource (%s)...\n", cSourceFile); 
+//	char *program_source = load_program_source(cSourceFile, argv[0],  &szKernelLength);
 	cpProgram = clCreateProgramWithSource(cxGPUContext, 1, (const char**)&program_source,
-	                                         &szKernelLength, &ciErr1);
+	                                         NULL, &ciErr1);
 	
     printf("clCreateProgramWithSource...\n"); 
     if (ciErr1 != CL_SUCCESS)
