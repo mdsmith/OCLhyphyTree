@@ -18,12 +18,14 @@
 //struct timespec begin;
 //struct timespec end;
 
-#if defined(__APPLE_)
+#if defined(__APPLE__)
 #include <OpenCL/OpenCL.h>
+#include "appleOCL.h"
 typedef float fpoint;
-typedef cl_double clfp;
+typedef cl_float clfp;
 #else
 #include <oclUtils.h>
+#include "NVIDIA.h"
 typedef double fpoint;
 typedef cl_double clfp;
 #endif
@@ -32,12 +34,12 @@ typedef cl_double clfp;
 //**********************************************************************
 #define SITES           1024    //originally 1000
 #define CHARACTERS      4      //originally 61 (codons)
-#define NODES           100        //originally 100
+#define NODES           10        //originally 100
 
 
 // Scaling elements
 //**********************************************************************
-fpoint uflowThresh     = 0.00000001;
+fpoint uflowThresh     = 0.000001;
 fpoint scalar          = 100.0;
 void* scalings;
 cl_mem cmScalings;
@@ -68,61 +70,42 @@ size_t szParmDataBytes;         // Byte size of context information
 size_t szKernelLength;          // Byte size of kernel code
 cl_int ciErr1, ciErr2;          // Error code var
 char* cPathAndName = NULL;      // var for full paths to data, src, etc.
-char* cSourceCL = NULL;         // Buffer to hold source for compilation 
 
 // Forward Declarations
 // *********************************************************************
 void FirstLoopHost(const fpoint* node_cache, const fpoint* model, fpoint* parent_cache);
 void Cleanup (int iExitCode);
-
-char * load_program_source(const char *filename)
-{ 
-    
-    struct stat statbuf;
-    FILE *fh; 
-    char *source; 
-    
-    fh = fopen(filename, "r");
-    if (fh == 0)
-        return 0; 
-    
-    stat(filename, &statbuf);
-    source = (char *) malloc(statbuf.st_size + 1);
-    fread(source, statbuf.st_size, 1, fh);
-    source[statbuf.st_size] = '\0'; 
-    
-    return source; 
-} 
+extern char* load_program_source(const char *filename);
 
 // Main function 
 // *********************************************************************
 int main(int argc, char **argv)
 {
-
+	
     // time stuff:
     time_t dtimer;
     time_t htimer;
-
+	
     // set and log Global and Local work size dimensions
     
     szLocalWorkSize = CHARACTERS;
-//  szGlobalWorkSize = NODES * SITES * CHARACTERS;
+	//  szGlobalWorkSize = NODES * SITES * CHARACTERS;
     szGlobalWorkSize = SITES * CHARACTERS;
     localMemorySize = CHARACTERS;
     printf("Global Work Size \t\t= %u\nLocal Work Size \t\t= %u\n# of Work Groups \t\t= %u\n\n", 
            szGlobalWorkSize, szLocalWorkSize, 
            (szGlobalWorkSize % szLocalWorkSize + szGlobalWorkSize/szLocalWorkSize)); 
-
+	
     // Allocate and initialize host arrays 
     //*************************************************
     printf( "Allocate and Init Host Mem...\n"); 
-
+	
     node_cache      = (void*)malloc (sizeof(clfp)*CHARACTERS*SITES);
     parent_cache    = (void*)malloc (sizeof(clfp)*CHARACTERS*SITES);
     scalings        = (void*)malloc (sizeof(int)*CHARACTERS*SITES);
     model           = (void*)malloc (sizeof(clfp)*CHARACTERS*CHARACTERS);
     Golden          = (void*)malloc (sizeof(clfp)*CHARACTERS*SITES);
-
+	
     long tempindex = 0;
     // initialize the vectors
     for (tempindex = 0; tempindex < (CHARACTERS*SITES); tempindex++)
@@ -132,26 +115,26 @@ int main(int argc, char **argv)
         ((fpoint*)parent_cache)[tempindex] = 1.;
         ((int*)scalings)[tempindex] = 0;
     }
-
+	
     // initialize the model
     for (tempindex = 0; tempindex < (CHARACTERS*CHARACTERS); tempindex++)
     {
         ((fpoint*)model)[tempindex] = 1./CHARACTERS; // this is just dummy filler
     }
-
+	
     //**************************************************
     dtimer = time(NULL); 
-
+	
     //Get an OpenCL platform
     ciErr1 = clGetPlatformIDs(1, &cpPlatform, NULL);
-
+	
     printf("clGetPlatformID...\n"); 
     if (ciErr1 != CL_SUCCESS)
     {
         printf("Error in clGetPlatformID, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
-
+	
     //Get the devices
     ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 1, &cdDevice, NULL);
     printf("clGetDeviceIDs...\n"); 
@@ -163,7 +146,7 @@ int main(int argc, char **argv)
     
     size_t maxWorkGroupSize;
     ciErr1 = clGetDeviceInfo(cdDevice, CL_DEVICE_MAX_WORK_GROUP_SIZE, 
-                        sizeof(size_t), &maxWorkGroupSize, NULL);
+							 sizeof(size_t), &maxWorkGroupSize, NULL);
     if (ciErr1 != CL_SUCCESS)
     {
         printf("Getting max work group size failed!\n");
@@ -172,7 +155,7 @@ int main(int argc, char **argv)
     
     cl_uint extcheck;
     ciErr1 = clGetDeviceInfo(cdDevice, CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE, 
-                        sizeof(cl_uint), &extcheck, NULL);
+							 sizeof(cl_uint), &extcheck, NULL);
     if (extcheck ==0 ) 
     {
         printf("Device does not support double precision.\n");
@@ -182,12 +165,12 @@ int main(int argc, char **argv)
     cl_char vendor_name[1024] = {0};
     cl_char device_name[1024] = {0};
     ciErr1 = clGetDeviceInfo(cdDevice, CL_DEVICE_VENDOR, sizeof(vendor_name), 
-                          vendor_name, &returned_size);
+							 vendor_name, &returned_size);
     ciErr1 |= clGetDeviceInfo(cdDevice, CL_DEVICE_NAME, sizeof(device_name), 
-                           device_name, &returned_size);
+							  device_name, &returned_size);
     assert(ciErr1 == CL_SUCCESS);
     printf("Connecting to %s %s...\n", vendor_name, device_name);
-
+	
     //Create the context
     cxGPUContext = clCreateContext(0, 1, &cdDevice, NULL, NULL, &ciErr1);
     printf("clCreateContext...\n"); 
@@ -196,7 +179,7 @@ int main(int argc, char **argv)
         printf("Error in clCreateContext, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
-
+	
     // Create a command-queue
     cqCommandQueue = clCreateCommandQueue(cxGPUContext, cdDevice, 0, &ciErr1);
     printf("clCreateCommandQueue...\n"); 
@@ -205,18 +188,18 @@ int main(int argc, char **argv)
         printf("Error in clCreateCommandQueue, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
-
+	
     // Allocate the OpenCL buffer memory objects for source and result on the device GMEM
     cmNode_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY, 
-                    sizeof(clfp) * CHARACTERS * SITES, NULL, &ciErr1);
+								  sizeof(clfp) * CHARACTERS * SITES, NULL, &ciErr1);
     cmModel = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY, 
-                    sizeof(clfp) * CHARACTERS * CHARACTERS, NULL, &ciErr2);
+							 sizeof(clfp) * CHARACTERS * CHARACTERS, NULL, &ciErr2);
     ciErr1 |= ciErr2;
     cmParent_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE, 
-                    sizeof(clfp) * CHARACTERS * SITES, NULL, &ciErr2);
+									sizeof(clfp) * CHARACTERS * SITES, NULL, &ciErr2);
     ciErr1 |= ciErr2;
     cmScalings = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
-                    sizeof(cl_int) * CHARACTERS * SITES, NULL, &ciErr2);
+								sizeof(cl_int) * CHARACTERS * SITES, NULL, &ciErr2);
     ciErr1 |= ciErr2;
     printf("clCreateBuffer...\n"); 
     if (ciErr1 != CL_SUCCESS)
@@ -224,38 +207,25 @@ int main(int argc, char **argv)
         printf("Error in clCreateBuffer, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
-
-
-    // Create the program
-    //**************************NVIDIA*******************************
-    shrLog("oclLoadProgSource (%s)...\n", cSourceFile); 
-    cPathAndName = shrFindFilePath(cSourceFile, argv[0]);
-    cSourceCL = oclLoadProgSource(cPathAndName, "", &szKernelLength); 
-    cpProgram = clCreateProgramWithSource(cxGPUContext, 1, (const char **)&cSourceCL, &szKernelLength, &ciErr1);
-
-    //**************************APPLE********************************
-
+	
+	// Create the program
     
-    // Read the OpenCL kernel in from source file
-//    printf("LoadProgSource (%s)...\n", cSourceFile); 
-//  char *program_source = load_program_source(cSourceFile);
-//  cpProgram = clCreateProgramWithSource(cxGPUContext, 1, (const char**)&program_source,
-//                                         &szKernelLength, &ciErr1);
-
-
-    //***************************************************************
-
-
+	// Read the OpenCL kernel in from source file
+	printf("LoadProgSource (%s)...\n", cSourceFile); 
+	char *program_source = load_program_source(cSourceFile);
+	cpProgram = clCreateProgramWithSource(cxGPUContext, 1, (const char**)&program_source,
+	                                         &szKernelLength, &ciErr1);
+	
     printf("clCreateProgramWithSource...\n"); 
     if (ciErr1 != CL_SUCCESS)
     {
         printf("Error in clCreateProgramWithSource, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
-
+	
     ciErr1 = clBuildProgram(cpProgram, 1, &cdDevice, NULL, NULL, NULL);
     printf("clBuildProgram...\n"); 
-
+	
     // Shows the log
     char* build_log;
     size_t log_size;
@@ -267,27 +237,27 @@ int main(int argc, char **argv)
     build_log[log_size] = '\0';
     printf(build_log);
     delete[] build_log;
-
+	
     if (ciErr1 != CL_SUCCESS)
     {
-          printf("%i\n", ciErr1); //prints "1"
-          switch(ciErr1)
-          {
-                case   CL_INVALID_PROGRAM: printf("CL_INVALID_PROGRAM\n"); break;
-                case   CL_INVALID_VALUE: printf("CL_INVALID_VALUE\n"); break;
-                case   CL_INVALID_DEVICE: printf("CL_INVALID_DEVICE\n"); break;
-                case   CL_INVALID_BINARY: printf("CL_INVALID_BINARY\n"); break; 
-                case   CL_INVALID_BUILD_OPTIONS: printf("CL_INVALID_BUILD_OPTIONS\n"); break;
-                case   CL_COMPILER_NOT_AVAILABLE: printf("CL_COMPILER_NOT_AVAILABLE\n"); break;
-                case   CL_BUILD_PROGRAM_FAILURE: printf("CL_BUILD_PROGRAM_FAILURE\n"); break;
-                case   CL_INVALID_OPERATION: printf("CL_INVALID_OPERATION\n"); break;
-                case   CL_OUT_OF_HOST_MEMORY: printf("CL_OUT_OF_HOST_MEMORY\n"); break;
-                default: printf("Strange error\n"); //This is printed
-          }
-          printf("Error in clBuildProgram, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-          Cleanup(EXIT_FAILURE);
+		printf("%i\n", ciErr1); //prints "1"
+		switch(ciErr1)
+		{
+			case   CL_INVALID_PROGRAM: printf("CL_INVALID_PROGRAM\n"); break;
+			case   CL_INVALID_VALUE: printf("CL_INVALID_VALUE\n"); break;
+			case   CL_INVALID_DEVICE: printf("CL_INVALID_DEVICE\n"); break;
+			case   CL_INVALID_BINARY: printf("CL_INVALID_BINARY\n"); break; 
+			case   CL_INVALID_BUILD_OPTIONS: printf("CL_INVALID_BUILD_OPTIONS\n"); break;
+			case   CL_COMPILER_NOT_AVAILABLE: printf("CL_COMPILER_NOT_AVAILABLE\n"); break;
+			case   CL_BUILD_PROGRAM_FAILURE: printf("CL_BUILD_PROGRAM_FAILURE\n"); break;
+			case   CL_INVALID_OPERATION: printf("CL_INVALID_OPERATION\n"); break;
+			case   CL_OUT_OF_HOST_MEMORY: printf("CL_OUT_OF_HOST_MEMORY\n"); break;
+			default: printf("Strange error\n"); //This is printed
+		}
+		printf("Error in clBuildProgram, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
+		Cleanup(EXIT_FAILURE);
     }
-
+	
     // Create the kernel
     ckKernel = clCreateKernel(cpProgram, "FirstLoop", &ciErr1);
     printf("clCreateKernel (FirstLoop)...\n"); 
@@ -296,12 +266,12 @@ int main(int argc, char **argv)
         printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
-
-        
+	
+	
     int tempNodeCount = NODES;
     int tempSiteCount = SITES;
     int tempCharCount = CHARACTERS;
-
+	
     // Set the Argument values
     ciErr1 = clSetKernelArg(ckKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
     ciErr1 |= clSetKernelArg(ckKernel, 1, sizeof(cl_mem), (void*)&cmModel);
@@ -320,38 +290,38 @@ int main(int argc, char **argv)
         printf("Error in clSetKernelArg, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
-
+	
     // --------------------------------------------------------
     // Start Core sequence... copy input data to GPU, compute, copy results back
-
+	
     // Asynchronous write of data to GPU device
     ciErr1 = clEnqueueWriteBuffer(cqCommandQueue, cmNode_cache, CL_FALSE, 0, 
-                    sizeof(clfp) * CHARACTERS * SITES, node_cache, 0, NULL, NULL);
+								  sizeof(clfp) * CHARACTERS * SITES, node_cache, 0, NULL, NULL);
     ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmModel, CL_FALSE, 0, 
-                    sizeof(clfp) * CHARACTERS * CHARACTERS, model, 0, NULL, NULL);
+								   sizeof(clfp) * CHARACTERS * CHARACTERS, model, 0, NULL, NULL);
     ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmParent_cache, CL_FALSE, 0, 
-                    sizeof(clfp) * CHARACTERS * SITES, parent_cache, 0, NULL, NULL);
+								   sizeof(clfp) * CHARACTERS * SITES, parent_cache, 0, NULL, NULL);
     ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmScalings, CL_FALSE, 0,
-                    sizeof(cl_int) * CHARACTERS * SITES, scalings, 0, NULL, NULL);
+								   sizeof(cl_int) * CHARACTERS * SITES, scalings, 0, NULL, NULL);
     printf("clEnqueueWriteBuffer (node_cache, parent_cache and model)...\n"); 
     if (ciErr1 != CL_SUCCESS)
     {
         printf("Error in clEnqueueWriteBuffer, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
-
+	
     // Launch kernel
     
     int nodeIndex;
-
-//    clock_gettime(CLOCK_REALTIME, &begin);
+	
+	//    clock_gettime(CLOCK_REALTIME, &begin);
     
     printf("clEnqueueNDRangeKernel (FirstLoop)...\n"); 
     for (nodeIndex = 0; nodeIndex < NODES; nodeIndex++)
     {
-    
+		
         ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckKernel, 1, NULL, 
-                        &szGlobalWorkSize, &szLocalWorkSize, 0, NULL, NULL);
+										&szGlobalWorkSize, &szLocalWorkSize, 0, NULL, NULL);
         
         if (ciErr1 != CL_SUCCESS)
         {
@@ -368,24 +338,24 @@ int main(int argc, char **argv)
                 case   CL_INVALID_GLOBAL_OFFSET: printf("CL_INVALID_GLOBAL_OFFSET\n"); break;
                 case   CL_INVALID_WORK_GROUP_SIZE: printf("CL_INVALID_WORK_GROUP_SIZE\n"); break;
                 case   CL_INVALID_WORK_ITEM_SIZE: printf("CL_INVALID_WORK_ITEM_SIZE\n"); break;
-    //          case   CL_MISALIGNED_SUB_BUFFER_OFFSET: printf("CL_OUT_OF_HOST_MEMORY\n"); break;
+					//          case   CL_MISALIGNED_SUB_BUFFER_OFFSET: printf("CL_OUT_OF_HOST_MEMORY\n"); break;
                 case   CL_INVALID_IMAGE_SIZE: printf("CL_INVALID_IMAGE_SIZE\n"); break;
                 case   CL_OUT_OF_RESOURCES: printf("CL_OUT_OF_RESOURCES\n"); break;
                 case   CL_MEM_OBJECT_ALLOCATION_FAILURE: printf("CL_MEM_OBJECT_ALLOCATION_FAILURE\n"); break;
                 case   CL_INVALID_EVENT_WAIT_LIST: printf("CL_INVALID_EVENT_WAIT_LIST\n"); break;
                 case   CL_OUT_OF_HOST_MEMORY: printf("CL_OUT_OF_HOST_MEMORY\n"); break;
                 default: printf("Strange error\n"); //This is printed
-             }
-             printf("Error in clEnqueueNDRangeKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-             Cleanup(EXIT_FAILURE);
+			}
+			printf("Error in clEnqueueNDRangeKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
+			Cleanup(EXIT_FAILURE);
         }
-    
-//      ciErr1 = clEnqueueBarrier(cqCommandQueue);
-    
+		
+		//      ciErr1 = clEnqueueBarrier(cqCommandQueue);
+		
     }
     
-//    clock_gettime(CLOCK_REALTIME, &end);
-
+	//    clock_gettime(CLOCK_REALTIME, &end);
+	
     // Synchronous/blocking read of results, and check accumulated errors
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmParent_cache, CL_TRUE, 0, sizeof(clfp) * CHARACTERS * SITES, parent_cache, 0, NULL, NULL);
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmScalings, CL_TRUE, 0, sizeof(cl_int) * CHARACTERS * SITES, scalings, 0, NULL, NULL);
@@ -400,8 +370,8 @@ int main(int argc, char **argv)
             case   CL_INVALID_MEM_OBJECT: printf("CL_INVALID_MEM_OBJECT\n"); break;
             case   CL_INVALID_VALUE: printf("CL_INVALID_VALUE\n"); break;   
             case   CL_INVALID_EVENT_WAIT_LIST: printf("CL_INVALID_EVENT_WAIT_LIST\n"); break;
-//          case   CL_MISALIGNED_SUB_BUFFER_OFFSET: printf("CL_MISALIGNED_SUB_BUFFER_OFFSET\n"); break;
-//          case   CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST: printf("CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST\n"); break;
+				//          case   CL_MISALIGNED_SUB_BUFFER_OFFSET: printf("CL_MISALIGNED_SUB_BUFFER_OFFSET\n"); break;
+				//          case   CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST: printf("CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST\n"); break;
             case   CL_MEM_OBJECT_ALLOCATION_FAILURE: printf("CL_MEM_OBJECT_ALLOCATION_FAILURE\n"); break;
             case   CL_OUT_OF_RESOURCES: printf("CL_OUT_OF_RESOURCES\n"); break;
             case   CL_OUT_OF_HOST_MEMORY: printf("CL_OUT_OF_HOST_MEMORY\n"); break;
@@ -411,34 +381,34 @@ int main(int argc, char **argv)
         Cleanup(EXIT_FAILURE);
     }
     //--------------------------------------------------------
-
+	
     
     clFinish(cqCommandQueue);
     printf("%f seconds on device\n", difftime(time(NULL), dtimer));
-//    double timeDifference = ((double)end.tv_sec + ((double)end.tv_nsec/1000.0))-((double)begin.tv_sec + ((double)begin.tv_nsec/1000.0));
-//    printf("%f seconds on device\n", timeDifference);
+	//    double timeDifference = ((double)end.tv_sec + ((double)end.tv_nsec/1000.0))-((double)begin.tv_sec + ((double)begin.tv_nsec/1000.0));
+	//    printf("%f seconds on device\n", timeDifference);
     
     htimer = time(NULL);
-
-
+	
+	
     // Compute and compare results for golden-host and report errors and pass/fail
     printf("Comparing against Host/C++ computation...\n\n"); 
     
     FirstLoopHost ((const fpoint*)node_cache, (const fpoint*)model, (fpoint*)Golden);
-
+	
     printf("%f seconds on host\n", difftime(time(NULL), htimer));
-
-/*
-        int goldenLoop = 0;
-        for (goldenLoop = 0; goldenLoop < SITES; goldenLoop++)
-        {
-                printf("Golden: %e\n", ((fpoint*)Golden)[goldenLoop*CHARACTERS]);
-        }
-*/
-
-
-// Unscaling
-//***************************************************************************
+	
+	/*
+	 int goldenLoop = 0;
+	 for (goldenLoop = 0; goldenLoop < SITES; goldenLoop++)
+	 {
+	 printf("Golden: %e\n", ((fpoint*)Golden)[goldenLoop*CHARACTERS]);
+	 }
+	 */
+	
+	
+	// Unscaling
+	//***************************************************************************
     int scIndex;
     for (scIndex = 0; scIndex < CHARACTERS * SITES; scIndex++)
     {
@@ -448,30 +418,30 @@ int main(int argc, char **argv)
             ((int*)scalings)[scIndex]--;
         }
     }
-
-
+	
+	
     bool match = true;
-//        int unmatching = 0;
-//        long firstUnmatch = -1;
-//        long lastUnmatch = -1;
+	//        int unmatching = 0;
+	//        long firstUnmatch = -1;
+	//        long lastUnmatch = -1;
     int verI;
     for (verI  = 0; verI < CHARACTERS*SITES; verI++)
     {
-                if (verI%(SITES)==0)
-                        printf("Device: %e, Host: %e, Scalings: %i\n", ((fpoint*)parent_cache)[verI], ((fpoint*)Golden)[verI], ((int*)scalings)[verI]); 
-//                if (((fpoint*)parent_cache)[i] != ((fpoint*)Golden)[i]) match = false;
+		if (verI%(SITES)==0)
+			printf("Device: %e, Host: %e, Scalings: %i\n", ((fpoint*)parent_cache)[verI], ((fpoint*)Golden)[verI], ((int*)scalings)[verI]); 
+		//                if (((fpoint*)parent_cache)[i] != ((fpoint*)Golden)[i]) match = false;
         if (((fpoint*)parent_cache)[verI] != ((fpoint*)Golden)[verI])
         {
             match = false;
-//                        unmatching++;
-//                        if (firstUnmatch == -1) firstUnmatch = i;
-//                        if (lastUnmatch < i) lastUnmatch = i;
+			//                        unmatching++;
+			//                        if (firstUnmatch == -1) firstUnmatch = i;
+			//                        if (lastUnmatch < i) lastUnmatch = i;
         }
     }
-//        printf("Unmatching: %i, First: %d, Last: %d\n", unmatching, firstUnmatch, lastUnmatch);
+	//        printf("Unmatching: %i, First: %d, Last: %d\n", unmatching, firstUnmatch, lastUnmatch);
     printf("%s\n\n", (match) ? "PASSED" : "FAILED");
-
-
+	
+	
     // Cleanup and leave
     Cleanup (EXIT_SUCCESS);
 }
@@ -481,7 +451,6 @@ void Cleanup (int iExitCode)
     // Cleanup allocated objects
     printf("Starting Cleanup...\n\n");
     if(cPathAndName)free(cPathAndName);
-    if(cSourceCL)free(cSourceCL);
     if(ckKernel)clReleaseKernel(ckKernel);  
     if(cpProgram)clReleaseProgram(cpProgram);
     if(cqCommandQueue)clReleaseCommandQueue(cqCommandQueue);
@@ -489,7 +458,7 @@ void Cleanup (int iExitCode)
     if(cmNode_cache)clReleaseMemObject(cmNode_cache);
     if(cmModel)clReleaseMemObject(cmModel);
     if(cmParent_cache)clReleaseMemObject(cmParent_cache);
-
+	
     // Free host memory
     free(node_cache); 
     free(model);
@@ -504,18 +473,18 @@ void Cleanup (int iExitCode)
 void FirstLoopHost(const fpoint* hnode_cache, const fpoint* hmodel, fpoint* hparent_cache)
 {
     long index, myChar, parentChar, site;
-
+	
     fpoint sum;
-
-//        long i=0;
-//        for (i=0;i< CHARACTERS*SITES;i++)
-//        {
-//                if (i%10000==0)
-//                {
-//                        printf("Node_cache: %e, Parent_cache: %e\n", ((fpoint*)hnode_cache)[i], ((fpoint*)hparent_cache)[i]);
-//                }
-//        }
-
+	
+	//        long i=0;
+	//        for (i=0;i< CHARACTERS*SITES;i++)
+	//        {
+	//                if (i%10000==0)
+	//                {
+	//                        printf("Node_cache: %e, Parent_cache: %e\n", ((fpoint*)hnode_cache)[i], ((fpoint*)hparent_cache)[i]);
+	//                }
+	//        }
+	
     for (index = 0; index < NODES; index++) // this is meant to simulate looping over tree nodes
     {        
         int nodeIndex = index*SITES*CHARACTERS;
@@ -533,10 +502,10 @@ void FirstLoopHost(const fpoint* hnode_cache, const fpoint* hmodel, fpoint* hpar
                 hparent_cache[siteIndex+parentChar] *= sum;
             }
         }
-//                printf("Index: %i, ParentCache: %e\n", index, hparent_cache[0]);
+		//                printf("Index: %i, ParentCache: %e\n", index, hparent_cache[0]);
     }      
-//        for (index = 0; index < SITES; index++)
-//        {
-//                printf("hparent_cache: %e\n", hparent_cache[index*CHARACTERS]);
-//        }
+	//        for (index = 0; index < SITES; index++)
+	//        {
+	//                printf("hparent_cache: %e\n", hparent_cache[index*CHARACTERS]);
+	//        }
 }
