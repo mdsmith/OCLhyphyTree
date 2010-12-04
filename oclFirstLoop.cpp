@@ -7,8 +7,6 @@
 //
 // *********************************************************************
 
-#include <oclUtils.h>
-
 #include <stdio.h>
 #include <assert.h>
 #include <sys/sysctl.h>
@@ -20,8 +18,15 @@
 //struct timespec begin;
 //struct timespec end;
 
+#if defined(__APPLE_)
+#include <OpenCL/OpenCL.h>
+typedef float fpoint;
+typedef cl_double clfp;
+#else
+#include <oclUtils.h>
 typedef double fpoint;
 typedef cl_double clfp;
+#endif
 
 // Constants
 //**********************************************************************

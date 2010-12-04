@@ -11,8 +11,8 @@ __kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint
         __global int* scalings, fpoint uflowthresh, fpoint scalar)
 {
     // get index into global data array
-    int parentCharGlobal = get_global_id(0);
-	int parentCharLocal = get_local_id(0);
+    int parentCharGlobal = get_global_id(0); // a unique global ID for each parentcharacter
+	int parentCharLocal = get_local_id(0); // a local ID unique within the site.
 
 //	reimplement these checks to allow for non power of two work sizes. 
     // bound check (equivalent to the limit on a 'for' loop for standard/serial C code
@@ -22,7 +22,6 @@ __kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint
 //    }
 
 	nodeScratch[parentCharLocal] = node_cache[parentCharGlobal];
-	// broken
 	modelScratch[parentCharLocal] = model[parentCharLocal * characters + parentCharLocal];
 
 	barrier(CLK_LOCAL_MEM_FENCE);
