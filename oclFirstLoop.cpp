@@ -20,14 +20,14 @@
 
 #if defined(__APPLE__)
 #include <OpenCL/OpenCL.h>
-#include "appleOCL.h"
 typedef float fpoint;
 typedef cl_float clfp;
+#define FLOATPREC "typedef float fpoint; \n"
 #else
 #include <oclUtils.h>
-#include "NVIDIA.h"
 typedef double fpoint;
 typedef cl_double clfp;
+#define FLOATPREC "typedef double fpoint; \n"
 #endif
 
 // Constants
@@ -214,7 +214,7 @@ int main(int argc, char **argv)
 
 	const char *program_source = "\n" \
 	"#pragma OPENCL EXTENSION cl_khr_fp64: enable																				\n" \
-	"typedef double fpoint;																										\n" \
+	"" FLOATPREC                                                                                                                     \
 	"__kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint* model, __global fpoint* parent_cache, 	\n" \
     "    __local fpoint* nodeScratch, __local fpoint * modelScratch, int nodes, int sites, int characters,						\n" \
     "   __global int* scalings, fpoint uflowthresh, fpoint scalar)																\n" \
