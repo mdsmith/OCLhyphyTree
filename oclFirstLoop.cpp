@@ -32,8 +32,8 @@ typedef cl_double clfp;
 
 // Constants
 //**********************************************************************
-#define SITES           1024    //originally 1000
-#define CHARACTERS      64      //originally 61 (codons)
+#define SITES           1000    //originally 1000
+#define CHARACTERS      61      //originally 61 (codons)
 #define NODES           150        //originally 100
 
 
@@ -46,7 +46,7 @@ cl_mem cmScalings;
 
 // Name of the file with the source code for the computation kernel
 // *********************************************************************
-const char* cSourceFile = "oclFirstLoop.cl";
+//const char* cSourceFile = "oclFirstLoop.cl";
 
 // Host buffers for demo
 // *********************************************************************
@@ -75,7 +75,8 @@ char* cPathAndName = NULL;      // var for full paths to data, src, etc.
 // *********************************************************************
 void FirstLoopHost(const fpoint* node_cache, const fpoint* model, fpoint* parent_cache);
 void Cleanup (int iExitCode);
-extern char* load_program_source(const char *filename, const char *argv, size_t *szKernelLength);
+unsigned int roundUpToNextPowerOfTwo(unsigned int x);
+//extern char* load_program_source(const char *filename, const char *argv, size_t *szKernelLength);
 
 // Main function 
 // *********************************************************************
@@ -88,10 +89,10 @@ int main(int argc, char **argv)
 	
     // set and log Global and Local work size dimensions
     
-    szLocalWorkSize = CHARACTERS;
+    szLocalWorkSize = roundUpToNextPowerOfTwo(CHARACTERS);
 	//  szGlobalWorkSize = NODES * SITES * CHARACTERS;
-    szGlobalWorkSize = SITES * CHARACTERS;
-    localMemorySize = CHARACTERS;
+    szGlobalWorkSize = roundUpToNextPowerOfTwo(SITES) * roundUpToNextPowerOfTwo(CHARACTERS);
+    localMemorySize = roundUpToNextPowerOfTwo(CHARACTERS);
     printf("Global Work Size \t\t= %u\nLocal Work Size \t\t= %u\n# of Work Groups \t\t= %u\n\n", 
            szGlobalWorkSize, szLocalWorkSize, 
            (szGlobalWorkSize % szLocalWorkSize + szGlobalWorkSize/szLocalWorkSize)); 
@@ -214,13 +215,15 @@ int main(int argc, char **argv)
 
 	const char *program_source = "\n" \
 	"#pragma OPENCL EXTENSION cl_khr_fp64: enable																				\n" \
-	"" FLOATPREC                                                                                                                     \
+	"" FLOATPREC                                                                                                                    \
 	"__kernel void FirstLoop(__global const fpoint* node_cache, __global const fpoint* model, __global fpoint* parent_cache, 	\n" \
     "    __local fpoint* nodeScratch, __local fpoint * modelScratch, int nodes, int sites, int characters,						\n" \
     "   __global int* scalings, fpoint uflowthresh, fpoint scalar)																\n" \
 	"{																															\n" \
 	"   int parentCharGlobal = get_global_id(0); // a unique global ID for each parentcharacter									\n" \
     "   int parentCharLocal = get_local_id(0); // a local ID unique within the site.											\n" \
+	"	if ((parentCharGlobal/characters) >= sites) return;																		\n" \
+	"	if (parentCharLocal >= characters) return;																				\n" \
 	"   nodeScratch[parentCharLocal] = node_cache[parentCharGlobal];															\n" \
     "   modelScratch[parentCharLocal] = model[parentCharLocal * characters + parentCharLocal];									\n" \
 	"	barrier(CLK_LOCAL_MEM_FENCE);																							\n" \
@@ -517,7 +520,6 @@ void FirstLoopHost(const fpoint* hnode_cache, const fpoint* hmodel, fpoint* hpar
 	
     for (index = 0; index < NODES; index++) // this is meant to simulate looping over tree nodes
     {        
-        int nodeIndex = index*SITES*CHARACTERS;
         for (site = 0; site < SITES; site++)
         {
             int siteIndex = site*CHARACTERS;
@@ -538,4 +540,17 @@ void FirstLoopHost(const fpoint* hnode_cache, const fpoint* hmodel, fpoint* hpar
 	//        {
 	//                printf("hparent_cache: %e\n", hparent_cache[index*CHARACTERS]);
 	//        }
+}
+
+unsigned int roundUpToNextPowerOfTwo(unsigned int x)
+{
+	x--;
+	x |= x >> 1;
+	x |= x >> 2;
+	x |= x >> 4;
+	x |= x >> 8;
+	x |= x >> 16;
+	x++;
+
+	return x;
 }
